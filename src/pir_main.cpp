@@ -21,7 +21,7 @@
 //**********************
 bool onMqttMessageAppExt(char *, char *, const AsyncMqttClientMessageProperties &, const size_t &, const size_t &, const size_t &);    // Required by template
 void appMQTTTopicSubscribe();
-int sensorRead();
+void pirRead();
 void telnet_extension_1(char);      // Required by template
 void telnet_extension_2(char);      // Required by template
 void telnet_extensionHelp(char);    // Required by template
@@ -65,12 +65,16 @@ int inOverrideHighPin   = D0;	// Input1. Manual override. If high hold output ON
 int inOverrideLowPin    = D3;	// Input2. Manual override. If low hold output ON. D3 is a pulled up pin.
 int inOverrideHighPin2  = D7;   // Input3. Manual override. If high hold output ON
 
-    int pinVal1 = 0;    // inOverrideHighPin
-	int pinVal2 = 1;    // inOverrideLowPin
-	int pinVal3 = 0;    // inOverrideHighPin2
+int pinVal1 = 0;    // PIR output. inOverrideHighPin
+int pinVal2 = 1;    // inOverrideLowPin
+int pinVal3 = 0;    // inOverrideHighPin2
+
+#define pirStateNoDetection     0
+#define pirStateDetection       1
+#define pirStateForceDetection  2
+int pirState = pirStateNoDetection;
 
 bool bManMode = false; // true = Manual, false = automatic
-
 
 void setup()
 {
@@ -97,10 +101,11 @@ void setup()
     //pinMode(A0, INPUT);
     //sensorReadTimer.attach(90, sensorRead); // read every 5 mins
 
-
 	pinMode(outRelayPin, OUTPUT);
 	pinMode(inOverrideLowPin, INPUT);
 	pinMode(inOverrideHighPin, INPUT);    
+
+    digitalWrite(outRelayPin, LOW);
 }
 
 void loop()
@@ -112,15 +117,13 @@ void loop()
 
     handleTelnet();
 
-    void pirRead();
+    pirRead();
 }
 
-
-
+// FIXTHIS Check for relay bounce. Somethines see on, off, on
 void pirRead()
 {
     char logString[MAX_LOGSTRING_LENGTH];
-
 
     bManMode = false;
 	pinVal1 = digitalRead(inOverrideHighPin);  // detector
@@ -129,18 +132,29 @@ void pirRead()
 
 	if (pinVal1 == 1 || pinVal2 == 0 || pinVal3 == 1)
 	{
+
 		bManMode = true;
 		memset(logString, 0, sizeof logString);
-		if (pinVal1 == 1)
+		if (pinVal1 == 1 )
 		{
-			sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "PIR Detection.");
-	        //client.publish(oh3StateValue, "DETECTION");
-            mqttClient.publish(oh3StateValue, 1, true, "DETECTION");
+            if (pirState != pirStateDetection)
+            {
+			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "PIR Detection.");
+                printTelnet((String)logString);
+                pirState = pirStateDetection;
+                mqttClient.publish(oh3StateValue, 1, true, "DETECTION");
+            }
 		}
 		else
 		{
-			sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Forced detection.");
-            mqttClient.publish(oh3StateValue, 1, true, "FORCED-DETECTION");
+            if (pirState != pirStateDetection)
+            {
+			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Forced detection.");
+                printTelnet((String)logString);
+
+                pirState = pirStateDetection;
+                mqttClient.publish(oh3StateValue, 1, true, "FORCED-DETECTION");
+            }
 		}
 		mqttLog(logString, true, true);
 		digitalWrite(outRelayPin, HIGH);
@@ -148,18 +162,20 @@ void pirRead()
 	else
 	{
 		bManMode = false;
-        if (reporting == REPORT_DEBUG)
-	    {
-					memset(logString, 0, sizeof logString);
-					sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Waiting for detection.");
+        if (pirState == pirStateDetection)
+        {
+           //if (reporting == REPORT_DEBUG)
+	        //{
+					sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "No detection.");
+                    printTelnet((String)logString);
 					mqttLog(logString, true, true);
-		}
-		digitalWrite(outRelayPin, LOW);
-		mqttClient.publish(oh3StateValue, 1, true, "NO-DETECTION");
+		    //}
+            pirState = pirStateNoDetection;
+		    digitalWrite(outRelayPin, LOW);
+		    mqttClient.publish(oh3StateValue, 1, true, "NO-DETECTION");
+        }
 	}
-
 }
-
 
 // Process any application specific inbound MQTT messages
 // Return False if none
@@ -172,7 +188,7 @@ bool onMqttMessageAppExt(char *topic, char *payload, const AsyncMqttClientMessag
 // Subscribe to application specific topics
 void appMQTTTopicSubscribe()
 {
-
+    mqttClient.publish(oh3StateValue, 1, true, "NO-DETECTION");
     // mqttTopicsubscribe(oh3StateValue, 2);
 }
 
@@ -181,7 +197,7 @@ void telnet_extension_1(char c)
 {
     char logString[MAX_LOGSTRING_LENGTH];
     memset(logString, 0, sizeof logString);
-    sprintf(logString, "%s%s%d%s%d%s%d\n\r", "Pin Values: \t", "Hold ON 1: ", pinVal1,  " Hold ON 2: ", pinVal2," Hold ON 3: ",pinVal3  );
+    sprintf(logString, "%s%s%d%s%d%s%d%s%d\n\r", "Pin Values: \t", "Hold ON 1: ", pinVal1,  " Hold ON 2: ", pinVal2 ," Hold ON 3: ",pinVal3," Output: ",digitalRead(outRelayPin) );
     printTelnet((String)logString);
 }
 
@@ -201,7 +217,6 @@ void drdDetected()
 {
     Serial.println("Double resert detected");
 }
-
 
 //**********************************************************************
 // Main Application
