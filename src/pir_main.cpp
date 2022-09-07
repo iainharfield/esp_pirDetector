@@ -141,8 +141,14 @@ void pirRead()
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "PIR Detection.");
                 printTelnet((String)logString);
+                mqttLog(logString, true, true);
                 pirState = pirStateDetection;
                 mqttClient.publish(oh3StateValue, 1, true, "DETECTION");
+            }
+            else
+            {
+                digitalWrite(outRelayPin, HIGH);
+                delay(100);
             }
 		}
 		else
@@ -151,18 +157,23 @@ void pirRead()
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Forced detection.");
                 printTelnet((String)logString);
+                mqttLog(logString, true, true);
 
                 pirState = pirStateDetection;
                 mqttClient.publish(oh3StateValue, 1, true, "FORCED-DETECTION");
             }
+            else
+            {
+                digitalWrite(outRelayPin, HIGH);
+                delay(100);
+            }
 		}
-		mqttLog(logString, true, true);
-		digitalWrite(outRelayPin, HIGH);
 	}
 	else
 	{
 		bManMode = false;
-        if (pirState == pirStateDetection)
+
+        if  (pirState != pirStateNoDetection)
         {
            //if (reporting == REPORT_DEBUG)
 	        //{
@@ -172,8 +183,10 @@ void pirRead()
 		    //}
             pirState = pirStateNoDetection;
 		    digitalWrite(outRelayPin, LOW);
+            delay(100);
+            
 		    mqttClient.publish(oh3StateValue, 1, true, "NO-DETECTION");
-        }
+        }           
 	}
 }
 
