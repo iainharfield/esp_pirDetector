@@ -74,7 +74,7 @@ int pinVal3 = 0;    // inOverrideHighPin2
 #define pirStateForceDetection  2
 int pirState = pirStateNoDetection;
 
-bool bManMode = false; // true = Manual, false = automatic
+//bool bManMode = false; // true = Manual, false = automatic
 
 void setup()
 {
@@ -120,30 +120,29 @@ void loop()
     pirRead();
 }
 
-// FIXTHIS Check for relay bounce. Somethines see on, off, on
+// 
 void pirRead()
 {
     char logString[MAX_LOGSTRING_LENGTH];
 
-    bManMode = false;
-	pinVal1 = digitalRead(inOverrideHighPin);  // detector
-	pinVal2 = digitalRead(inOverrideLowPin);   // override 1
-	pinVal3 = digitalRead(inOverrideHighPin2); // override 2
+    //bManMode = false;
+	pinVal1 = digitalRead(inOverrideHighPin);  // pir detector pir, 1 = on
+	pinVal2 = digitalRead(inOverrideLowPin);   // override 1, 0 = force on
+	pinVal3 = digitalRead(inOverrideHighPin2); // override 2, 1 = force on
 
-	if (pinVal1 == 1 || pinVal2 == 0 || pinVal3 == 1)
+	if (pinVal1 == 1 && pinVal2 == 1 && pinVal3 == 0)
 	{
-
-		bManMode = true;
 		memset(logString, 0, sizeof logString);
-		if (pinVal1 == 1 )
+		if (pinVal1 == 1 )                  // PIR detection
 		{
-            if (pirState != pirStateDetection)
+            //bManMode = false;
+            if (pirState != pirStateDetection && pirState != pirStateForceDetection)
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "PIR Detection.");
                 printTelnet((String)logString);
                 mqttLog(logString, true, true);
                 pirState = pirStateDetection;
-                mqttClient.publish(oh3StateValue, 1, true, "DETECTION");
+                mqttClient.publish(oh3StateValue, 1, true, "DETECTION"); // Openhab rule switches ALL light on
             }
             else
             {
@@ -151,28 +150,30 @@ void pirRead()
                 delay(100);
             }
 		}
-		else
-		{
-            if (pirState != pirStateDetection)
+    }
+
+    else if (pinVal2 == 0 || pinVal3 == 1 )                                      //Lights being forced on by switch
+	{
+            //bManMode = true;
+            if (pirState != pirStateForceDetection)
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Forced detection.");
                 printTelnet((String)logString);
                 mqttLog(logString, true, true);
 
-                pirState = pirStateDetection;
-                mqttClient.publish(oh3StateValue, 1, true, "FORCED-DETECTION");
+                pirState = pirStateForceDetection;
+                mqttClient.publish(oh3StateValue, 1, true, "FORCED-DETECTION");  //  Openhab rule switches ALL light on
             }
             else
             {
-                digitalWrite(outRelayPin, HIGH);
+                digitalWrite(outRelayPin, HIGH);                                //Switch ON only Garage path
                 delay(100);
             }
-		}
+		
 	}
 	else
 	{
-		bManMode = false;
-
+        
         if  (pirState != pirStateNoDetection)
         {
            //if (reporting == REPORT_DEBUG)
@@ -181,11 +182,12 @@ void pirRead()
                     printTelnet((String)logString);
 					mqttLog(logString, true, true);
 		    //}
+            //FIXTHIS : What happens wen the lights are in auto matic mode and are on - wont this switch them off? 
             pirState = pirStateNoDetection;
-		    digitalWrite(outRelayPin, LOW);
-            delay(100);
+		    digitalWrite(outRelayPin, LOW);                                 //Switch OFF
+            delay(100);                                                     //Relay bounce settle time
             
-		    mqttClient.publish(oh3StateValue, 1, true, "NO-DETECTION");
+		    mqttClient.publish(oh3StateValue, 1, true, "NO-DETECTION");     // Openhab rule Switches OFF all lights
         }           
 	}
 }
