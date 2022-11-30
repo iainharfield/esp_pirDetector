@@ -135,7 +135,7 @@ void pirRead()
 		memset(logString, 0, sizeof logString);
 		if (pinVal1 == 1 )                  // PIR detection
 		{
-            //bManMode = false;
+           
             if (pirState != pirStateDetection && pirState != pirStateForceDetection)
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "PIR Detection.");
@@ -154,7 +154,7 @@ void pirRead()
 
     else if (pinVal2 == 0 || pinVal3 == 1 )                                      //Lights being forced on by switch
 	{
-            //bManMode = true;
+            
             if (pirState != pirStateForceDetection)
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Forced detection.");
@@ -176,12 +176,13 @@ void pirRead()
         
         if  (pirState != pirStateNoDetection)
         {
-           //if (reporting == REPORT_DEBUG)
-	        //{
-					sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "No detection.");
-                    printTelnet((String)logString);
-					mqttLog(logString, true, true);
-		    //}
+			sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "No detection.");
+            mqttLog(logString, true, true);
+            if (reporting == REPORT_DEBUG)
+	        { 
+                 printTelnet((String)logString);                 
+		    }
+            
             //FIXTHIS : What happens wen the lights are in auto matic mode and are on - wont this switch them off? 
             pirState = pirStateNoDetection;
 		    digitalWrite(outRelayPin, LOW);                                 //Switch OFF
