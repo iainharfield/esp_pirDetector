@@ -1,10 +1,15 @@
 
-//#include <Arduino.h>
-#include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 #include <Ticker.h>
+#include <AsyncMqttClient.h> 
 #include <time.h>
-#include <AsyncMqttClient_Generic.hpp>
+
+#include "hh_defines.h"
+#include "hh_utilities.h"
+#include "hh_cntrl.h"
+
+// Folling line added to stop compilation error suddenly occuring in 2024???
+#include "ESPAsyncDNSServer.h"
 
 #define ESP8266_DRD_USE_RTC true
 #define ESP_DRD_USE_LITTLEFS false
@@ -13,19 +18,17 @@
 #define DOUBLERESETDETECTOR_DEBUG true
 #include <ESP_DoubleResetDetector.h>
 
-#include "defines.h"
-#include "utilities.h"
-
 //***********************
-// Application functions
-//**********************
-bool onMqttMessageAppExt(char *, char *, const AsyncMqttClientMessageProperties &, const size_t &, const size_t &, const size_t &);    // Required by template
+// Template functions
+//***********************
+bool onMqttMessageAppExt(char *, char *, const AsyncMqttClientMessageProperties &, const size_t &, const size_t &, const size_t &);
+bool onMqttMessageAppCntrlExt(char *, char *, const AsyncMqttClientMessageProperties &, const size_t &, const size_t &, const size_t &);
 void appMQTTTopicSubscribe();
-void pirRead();
-void telnet_extension_1(char);      // Required by template
-void telnet_extension_2(char);      // Required by template
-void telnet_extensionHelp(char);    // Required by template
-void processTOD_Ext();              // Required by template
+void telnet_extension_1(char);
+void telnet_extension_2(char);
+void telnet_extensionHelp(char);
+void startTimesReceivedChecker();
+void processCntrlTOD_Ext();
 
 //******************************
 // defined in asyncConnect.cpp
@@ -36,8 +39,10 @@ extern void handleTelnet();
 extern void printTelnet(String);
 extern AsyncMqttClient mqttClient;
 extern void wifiSetupConfig(bool);
+extern templateServices coreServices;
 extern char ntptod[MAX_CFGSTR_LENGTH];
 
+//*************************
 // defined in telnet.cpp
 //*************************
 extern int reporting;
@@ -50,6 +55,12 @@ DoubleResetDetector *drd;
 
 // Application Specific MQTT Topics and config
 //const char *oh3StateValue = "/house/pir/garage-side-door/value";  //FIXTHIS
+
+//**********************
+// application specific
+//********************** 
+void pirRead();
+
 const char *oh3StateValue = "/house/pir/garage-side-door/runtime-state"; // e.g. DETECTION, NO-DETECTION, FORCED-DETECTION
 
 String deviceName = "garage-side-door";
@@ -140,7 +151,7 @@ void pirRead()
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "PIR Detection.");
                 printTelnet((String)logString);
-                mqttLog(logString, true, true);
+                mqttLog(logString, REPORT_WARN, true, true);
                 pirState = pirStateDetection;
                 mqttClient.publish(oh3StateValue, 1, true, "DETECTION"); // Openhab rule switches ALL light on
             }
@@ -159,7 +170,7 @@ void pirRead()
             {
 			    sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "Forced detection.");
                 printTelnet((String)logString);
-                mqttLog(logString, true, true);
+                mqttLog(logString, REPORT_WARN, true, true);
 
                 pirState = pirStateForceDetection;
                 mqttClient.publish(oh3StateValue, 1, true, "FORCED-DETECTION");  //  Openhab rule switches ALL light on
@@ -177,7 +188,7 @@ void pirRead()
         if  (pirState != pirStateNoDetection)
         {
 			sprintf(logString, "%s,%s,%s,%s", ntptod, espDevice.getType().c_str(), espDevice.getName().c_str(), "No detection.");
-            mqttLog(logString, true, true);
+            mqttLog(logString, REPORT_WARN, true, true);
             if (reporting == REPORT_DEBUG)
 	        { 
                  printTelnet((String)logString);                 
@@ -246,4 +257,13 @@ void processTOD_Ext()
     // Nothing to do for this app
 }
 
- 
+void processCntrlTOD_Ext()
+{
+    // Nothing to do for this app
+}
+
+ bool onMqttMessageAppCntrlExt(char *topic, char *payload, const AsyncMqttClientMessageProperties &properties, const size_t &len, const size_t &index, const size_t &total)
+{
+	// Nothing to do for this app
+    return false;
+}
